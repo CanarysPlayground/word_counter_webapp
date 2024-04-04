@@ -1,15 +1,18 @@
-from flask import Flask, request, render_template, redirect, url_for, flash
+from flask import Flask, request, render_template, redirect, url_for, flash, Markup
 import os
+import subprocess  # For executing system commands (related to vulnerability)
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)  # Generate a random secret key for session management
+app.secret_key = 'verysecretkey'  # Hardcoded secret key (Vulnerability #1)
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
     if request.method == 'POST':
-        if 'file' not in request.files:
-            flash('No file part')
-            return redirect(request.url)
+        # Command Injection vulnerability (Vulnerability #3)
+        filename = request.form['filename']
+        result = subprocess.run(['cat', filename], capture_output=True, text=True)
+        flash(f"Contents of {filename}: {result.stdout}")
+
         file = request.files['file']
         if file.filename == '':
             flash('No selected file')
@@ -17,11 +20,15 @@ def home():
         if file and file.filename.endswith('.txt'):
             content = file.read().decode("utf-8") 
             word_count = len(content.split())
-            return render_template('index.html', word_count=word_count)
-        else:
-            flash('Invalid file type. Only .txt files are allowed.')
-            return redirect(request.url)
+            # Reflective XSS vulnerability (Vulnerability #2)
+            flash(Markup(f"Successfully uploaded <script>alert('Your file has {word_count} words.');</script>"))
+            return redirect(url_for('home'))
+
+    # Insecure Deserialization vulnerability (Vulnerability #4)
+    if 'user_data' in request.cookies:
+        user_data = eval(request.cookies.get('user_data'))  # Unsafe deserialization
+        flash(f"Welcome back, {user_data['username']}!")
     return render_template('index.html', word_count=None)
 
 if __name__ == "__main__":
-    app.run(debug=True)  # Set debug=False in production
+    app.run(debug=True)
